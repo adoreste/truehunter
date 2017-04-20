@@ -29,3 +29,4 @@ optional arguments:
   -f, --fast            Do not calculate entropy.  
   -o OUTPUTFILE, --outputfile OUTPUTFILE  
                         Scan results file name, default scan_results.csv  
+## License: GPLv3
