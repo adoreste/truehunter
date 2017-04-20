@@ -1,5 +1,5 @@
 # Truehunter
-The goal of Truehunter is to detect encrypted containers using a fast and memory efficient approach. It was designed as a PoC for detecting TrueCrypt containers, however it should pickup some other files with an unknown header and high entropy.
+The goal of Truehunter is to detect TrueCrypt containers using a fast and memory efficient approach. It was designed as a PoC some time ago as I couldn't find any open source tool with the same functionality.
 ## Installation
 Just use with Python 2.7, it does not need any additional libraries. 
 ## Usage
@@ -30,3 +30,7 @@ optional arguments:
   -o OUTPUTFILE, --outputfile OUTPUTFILE  
                         Scan results file name, default scan_results.csv  
 ## License: GPLv3
+Truehunter  
+Author Andres Doreste  
+Copyright (C) 2015, Andres Doreste  
+License:   GPLv3  
