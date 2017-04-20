@@ -215,7 +215,7 @@ def main():
     th.slowScan()
 
     print '[+] %s files detected.'%(len(th.slowScanPositives))
-    print '[!] %s files possible encrypted files ignored'%(len(th.ignoredFiles))
+    print '[!] %s possible encrypted files ignored'%(len(th.ignoredFiles))
     print '[+] Done!'
     th.writeResults()
     updatedb(th, args.headersFile)
