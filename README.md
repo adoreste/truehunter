@@ -3,20 +3,23 @@ The goal of Truehunter is to detect TrueCrypt containers using a fast and memory
 ## Installation
 Just use with Python 2.7, it does not need any additional libraries. 
 ## Usage
-The headers database file will be created with the first use, and can be updated after every scan. Note this is not a correct header database, just the first 4 bytes of every file and the extension (It does the job as a PoC).
-
+The headers database file will be created with the first use, and can be updated after every scan. Note this is not a correct header database, just the first 4 bytes of every file, extension and date(It does the job as a PoC).  
+  
+Fast Scan: Searchs for files with a size % 64 = 0 (block ciphers), unknown headers and appearing less than MAXHEADER value (default 3).  
+Default Scan: Performs a fast scan and calculates the entropy of the resulting files to reduce false positives.  
+  
 usage: truehunter.py [-h] [-D HEADERSFILE] [-m MINSIZE] [-M MAXSIZE]  
                      [-R MAXHEADER] [-f] [-o OUTPUTFILE]  
-                     LOCATION  
+                      LOCATION  
   
 Checks for file size, unknown header, and entropy of files to determine if  
 they are encrypted containers.  
-
+  
 positional arguments:  
   LOCATION              Drive or directory to scan.  
 
 optional arguments:  
-  -h, --help            show this help message and exit . 
+  -h, --help            show this help message and exit.   
   -D HEADERSFILE, --database HEADERSFILE  
                         Headers database file, default headers.db  
   -m MINSIZE, --minsize MINSIZE  
