@@ -25,7 +25,7 @@ class truehunter:
                 filePath = os.path.join(path, filename)
                 try:
                     fileSize = os.path.getsize(filePath) / 1024
-                    if (fileSize % 128 == 0) and (fileSize > self.minFileSize):
+                    if (fileSize % 64 == 0) and (fileSize > self.minFileSize):
                         header = open(filePath, 'rb').read(4).encode('hex').upper()  # Read first 4 bytes, referenced as header but it's not.
                         dbresult = self.db.getheader(header)
                         if dbresult is not None:  # Quick and dirty way to check if there is something in the db
