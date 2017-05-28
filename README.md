@@ -6,7 +6,7 @@ Truehunter performs the following checks:
 2. File size modulo 64 must be zero.  
 3. Checks for file entropy.  
   
-Truehunter is part of BlackArch forensic tools. 
+Truehunter is part of BlackArch forensic tools.  
 https://blackarch.org/forensic.html
 
 ## Installation
