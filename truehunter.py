@@ -1,127 +1,138 @@
 #!/usr/bin/python
 # This tool has been created as a PoC.
 
-import sys, math, os, argparse, hashlib, shutil, csv, sqlite3, time
+import argparse
+import csv
+import hashlib
+import math
+import os
+import shutil
+import sqlite3
+import sys
+import time
 from collections import Counter
 
-class truehunter:
-    def __init__(self, database, minFileSize, maxFileSize, maxHeaderRep, ouputFile):
-        self.db = db_utils(database)
-        self.minFileSize = minFileSize
-        self.maxFileSize = maxFileSize
-        self.maxHeaderRep = maxHeaderRep
-        self.repeatedHeaders = self.db.getallheaders()
-        self.firstCheck = []
-        self.fastScanPositives = []
-        self.slowScanPositives = []
-        self.ignoredFiles = []  # Bigger than maxFileSize
-        self.outputFile = ouputFile
-        self.fullScanCompleted = False
 
-    def fastScan(self, location):
+class TrueHunter:
+    def __init__(self, database, min_file_size, max_file_size, max_header_count, output_file):
+        self.db = DbUtils(database)
+        self.min_file_size = min_file_size
+        self.max_file_size = max_file_size
+        self.max_header_count = max_header_count
+        self.repeated_headers = self.db.get_all_headers()
+        self.first_check = []
+        self.fast_scan_positives = []
+        self.slow_scan_positives = []
+        self.ignored_files = []  # Bigger than maxFileSize
+        self.output_file = output_file
+        self.full_scan_completed = False
+
+    def fast_scan(self, location):
         # Step one, check size and read first 4 bytes
         for (path, subdir, files) in os.walk(location):
             for filename in files:
-                filePath = os.path.join(path, filename)
+                file_path = os.path.join(path, filename)
                 try:
-                    fileSize = os.path.getsize(filePath) / 1024
-                    if (fileSize % 64 == 0) and (fileSize > self.minFileSize):
-                        header = open(filePath, 'rb').read(4).encode('hex').upper()  # Read first 4 bytes, referenced as header but it's not.
-                        dbresult = self.db.getheader(header)
-                        if dbresult is not None:  # Quick and dirty way to check if there is something in the db
-                            continue
-                        if header in self.repeatedHeaders:
-                            self.repeatedHeaders[header][0] += 1
+                    file_size = os.path.getsize(file_path) / 1024
+                    if (file_size % 64 == 0) and (file_size > self.min_file_size):
+                        # Read first 4 bytes, not a real header.
+                        header = open(file_path, 'rb').read(4).encode('hex').upper()
+                        if header in self.repeated_headers:
+                            self.repeated_headers[header][0] += 1
                         else:
-                            self.repeatedHeaders[header] = [1, filename]
-                        self.firstCheck.append([filePath, fileSize, header])
+                            self.repeated_headers[header] = [1, filename]
+                        self.first_check.append([file_path, file_size, header])
                 except:
-                    print '[!] Error reading %s' % (filePath)
+                    print '[!] Error reading %s' % file_path
         # Step two, check for header repetitions
-        for (filePath, fileSize, header) in self.firstCheck:
-            if self.repeatedHeaders[header][0] <= self.maxHeaderRep:
-                self.fastScanPositives.append({'Path': filePath, 'File Size': fileSize, 'Header': header})
+        for (file_path, file_size, header) in self.first_check:
+            if self.repeated_headers[header][0] <= self.max_header_count:
+                self.fast_scan_positives.append({'Path': file_path, 'File Size': file_size, 'Header': header})
 
-    def slowScan(self):
+    def slow_scan(self):
         # Memory efficient entropy calculation
-        for item in self.fastScanPositives:
-            filePath = item['Path']
-            header = item['Header']
-            fileSize = os.path.getsize(filePath)
+        for item in self.fast_scan_positives:
+            file_path = item.get('Path')
+            header = item.get('Header')
+            file_size = os.path.getsize(file_path)
             entropy = 0.0
-            md5HashFunc = hashlib.md5()
-            if (fileSize / 1024) <= self.maxFileSize:
-                hexFreq = {}
-                decFreq = {}
-                with open(filePath, 'rb') as file:
+            md5_hash_func = hashlib.md5()
+            if (file_size / 1024) <= self.max_file_size:
+                hex_freq = {}
+                dec_freq = {}
+                with open(file_path, 'rb') as f:
                     # Read chunks instead of mapping the whole file
                     while True:
-                        dataChunk = file.read(65535)
-                        if not dataChunk:
+                        data_chunk = f.read(65535)
+                        if not data_chunk:
                             break
-                        md5HashFunc.update(dataChunk)
-                        hexFreq = Counter(hexFreq) + (Counter(dataChunk))
+                        md5_hash_func.update(data_chunk)
+                        hex_freq = Counter(hex_freq) + (Counter(data_chunk))
                 # Transform (hex)byte values to (dec)byte and prepare counters for entropy calculation.
-                for byte in hexFreq:
-                    decFreq[ord(byte)] = float(hexFreq[byte]) / float(fileSize)
+                for byte in hex_freq:
+                    dec_freq[ord(byte)] = float(hex_freq[byte]) / float(file_size)
                 # Entropy calculation.
-                for repetition in decFreq.values():
+                for repetition in dec_freq.values():
                     if repetition > 0:
                         entropy -= repetition * math.log(repetition, 2)
                 if entropy > 7.998:
-                    self.slowScanPositives.append({'Path': filePath, 'Entropy': entropy, 'MD5 Hash': md5HashFunc.hexdigest(),
-                         'File Size': fileSize, 'Header': header})
+                    self.slow_scan_positives.append(
+                        {'Path': file_path, 'Entropy': entropy, 'MD5 Hash': md5_hash_func.hexdigest(),
+                         'File Size': file_size, 'Header': header})
             else:
-                self.ignoredFiles.append(
-                    {'Path': filePath, 'Entropy': 'Not calculated', 'File Size': fileSize, 'Header': header})
-        self.fullScanCompleted = True
+                self.ignored_files.append(
+                    {'Path': file_path, 'Entropy': 'Not calculated', 'File Size': file_size, 'Header': header})
+        self.full_scan_completed = True
 
-    def writeResults(self):
+    def write_results(self):
         # Write results to a CSV file
-        with open(self.outputFile, 'w') as csvfile:
-            fieldNames = ['Path', 'Entropy', 'MD5 Hash', 'File Size', 'Header']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldNames, dialect=csv.excel)
+        with open(self.output_file, 'w') as csvfile:
+            field_names = ['Path', 'Entropy', 'MD5 Hash', 'File Size', 'Header']
+            writer = csv.DictWriter(csvfile, fieldnames=field_names, dialect=csv.excel)
             writer.writeheader()
-            if self.fullScanCompleted:
-                if len(self.slowScanPositives) > 0:
-                    writer.writerows(self.slowScanPositives)
+            if self.full_scan_completed:
+                if len(self.slow_scan_positives) > 0:
+                    writer.writerows(self.slow_scan_positives)
                 else:
                     print '[!] No files detected.'
-                if len(self.ignoredFiles) > 0:
-                    writer.writerows(self.ignoredFiles)
-                    print '[+] Manually check ignored files or repeat the scan increasing the maximum file size to scan (-M, --maxsize).'
+                if len(self.ignored_files) > 0:
+                    writer.writerows(self.ignored_files)
+                    print '[+] Manually check ignored files or repeat the scan increasing the maximum file size to ' \
+                          'scan (-M, --maxsize). '
             else:
-                if len(self.fastScanPositives) > 0:
-                    writer.writerows(self.fastScanPositives)
+                if len(self.fast_scan_positives) > 0:
+                    writer.writerows(self.fast_scan_positives)
                 else:
                     print '[!] No files detected.'
 
-    def addRepeatedHeaders(self):
+    def add_repeated_headers(self):
         # Update headers.db
         headers = []
-        for item in self.repeatedHeaders:
+        for item in self.repeated_headers:
             # Only update if header repetition count is bigger than 10
-            if self.repeatedHeaders.get(item)[0] < 10: continue
+            if self.repeated_headers.get(item)[0] < 10:
+                continue
             try:
-                extension = self.repeatedHeaders.get(item)[1][::-1].split('.')[0][::-1]
+                extension = self.repeated_headers.get(item)[1][::-1].split('.')[0][::-1]
             except:
                 extension = ''
             header = item
             headers.append([header, extension])
-        self.db.updatedb(headers)
+        self.db.update_db(headers)
 
-class db_utils:
-    def __init__(self, databaseFile):
+
+class DbUtils:
+    def __init__(self, database_file):
         # Check if the db file exists.
-        if not os.path.isfile(databaseFile):
-            self.createdb(databaseFile)
+        if not os.path.isfile(database_file):
+            self.create_db(database_file)
         else:
-            self.conn = sqlite3.connect(databaseFile)
+            self.conn = sqlite3.connect(database_file)
             self.c = self.conn.cursor()
 
-    def createdb(self, databaseFile):
+    def create_db(self, database_file):
         # Create Database
-        self.conn = sqlite3.connect(databaseFile)
+        self.conn = sqlite3.connect(database_file)
         self.c = self.conn.cursor()
         # Create table
         self.c.execute('''CREATE TABLE headers
@@ -129,20 +140,22 @@ class db_utils:
         # Save (commit) the changes
         self.conn.commit()
 
-    def updatedb(self, headersarray):
+    def update_db(self, headers_array):
         date = time.strftime("%d/%m/%Y")
-        # headersarray must contain arrays ['header','extension']
-        for header, extension in headersarray:
+        # headers array must contain arrays ['header','extension']
+        for header, extension in headers_array:
             data = (header, extension, date,)
-            if self.getheader(header) is not None: continue # avoid adding repeated headers
-            else: self.c.execute('INSERT INTO headers VALUES (?,?,?)', data)
+            if self.get_header(header) is not None:
+                continue  # avoid adding repeated headers
+            else:
+                self.c.execute('INSERT INTO headers VALUES (?,?,?)', data)
         self.conn.commit()
 
-    def getheader(self, header):
+    def get_header(self, header):
         self.c.execute('SELECT * FROM headers WHERE header=?', (header,))
         return self.c.fetchone()
 
-    def getallheaders(self):
+    def get_all_headers(self):
         self.c.execute('SELECT Header FROM headers')
         x = self.c.fetchall()
         headers = {}
@@ -152,20 +165,24 @@ class db_utils:
             headers[header[0]] = 0
         return headers
 
-    def closedb(self):
+    def close_db(self):
         self.conn.commit()
         self.conn.close()
 
 
-def updatedb(th, database):
-    updatedb = raw_input('[?] Include repeated headers from this scan into the database? [Y/N]')
-    if updatedb.lower() == 'y':
-        shutil.copyfile(database, 'headers.db.bck')
-        print '[+] Database backup saved as headers.db.bck'
-        th.addRepeatedHeaders()
+def update_db(th, database):
+    update = raw_input('[?] Include repeated headers from this scan into the database? [Y/N]')
+    if update.lower() == 'y':
+        try:
+            shutil.copyfile(database, 'headers.db.bck')
+            print '[+] Database backup saved as headers.db.bck'
+        except IOError:
+            print '[!] Could not backup the existing database'
+            sys.exit(0)
+        th.add_repeated_headers()
         print '[+] Database updated.'
-    print '[+] Bye!'
     sys.exit(0)
+
 
 def main():
     description = ''' _                   _                 _            
@@ -180,16 +197,16 @@ def main():
     parser = argparse.ArgumentParser(
         description='Checks for file size, unknown header, and entropy of files to determine if they are encrypted containers.')
     parser.add_argument('LOCATION', help='Drive or directory to scan.')
-    parser.add_argument('-D', '--database', dest='headersFile', default='headers.db',
+    parser.add_argument('-D', '--database', dest='headers_file', default='headers.db',
                         help='Headers database file, default headers.db')
-    parser.add_argument('-m', '--minsize', dest='minSize', default=1024, type=int,
+    parser.add_argument('-m', '--minsize', dest='min_size', default=1024, type=int,
                         help='Minimum file size in Kb, default 1Mb.')
-    parser.add_argument('-M', '--maxsize', dest='maxSize', default=102400, type=int,
+    parser.add_argument('-M', '--maxsize', dest='max_size', default=102400, type=int,
                         help='Maximum file size in Kb, default 100Mb.')
-    parser.add_argument('-R', '--repeatHeader', dest='maxHeader', default=3, type=int,
+    parser.add_argument('-R', '--repeatHeader', dest='max_header', default=3, type=int,
                         help='Discard files with unknown headers repeated more than N times, default 3.')
-    parser.add_argument('-f', '--fast', dest='fastScan', action='store_true', help='Do not calculate entropy.')
-    parser.add_argument('-o', '--outputfile', dest='outputFile', default='scan_results.csv',
+    parser.add_argument('-f', '--fast', dest='fast_scan', action='store_true', help='Do not calculate entropy.')
+    parser.add_argument('-o', '--outputfile', dest='output_file', default='scan_results.csv',
                         help='Scan results file name, default scan_results.csv')
     args = parser.parse_args()
 
@@ -197,28 +214,29 @@ def main():
         print '[!] Could not read ' + args.LOCATION
         sys.exit(0)
 
-    th = truehunter(args.headersFile, args.minSize, args.maxSize, args.maxHeader, args.outputFile)
-    startTime = time.time()
+    th = TrueHunter(args.headers_file, args.min_size, args.max_size, args.max_header, args.output_file)
+    start_time = time.time()
 
     print '[+] Starting fast scan, it shouldn\'t take too long...'
-    th.fastScan(args.LOCATION)
+    th.fast_scan(args.LOCATION)
 
-    print '[+] %s files detected.'%(len(th.fastScanPositives))
+    print '[+] %s files detected.' % (len(th.fast_scan_positives))
     print '[+] Done!'
 
-    if args.fastScan:
-        print '[!] Scan finished in %.2f seconds.\n' % (time.time() - startTime)
-        th.writeResults()
-        updatedb(th, args.headersFile)
+    if args.fast_scan:
+        print '[!] Scan finished in %.2f seconds.\n' % (time.time() - start_time)
+        th.write_results()
+        update_db(th, args.headers_file)
 
-    print '[+] Starting entropy scan, staring at the screen won\'t help, better grab a coffee...'
-    th.slowScan()
+    print '[+] Starting entropy scan, staring at the screen won\'t help at this moment...'
+    th.slow_scan()
 
-    print '[+] %s files detected.'%(len(th.slowScanPositives))
-    print '[!] %s possible encrypted files ignored'%(len(th.ignoredFiles))
-    print '[+] Done!'
-    th.writeResults()
-    updatedb(th, args.headersFile)
+    print '[+] %s files detected.' % (len(th.slow_scan_positives))
+    print '[!] %s files possible encrypted files ignored' % (len(th.ignored_files))
+    th.write_results()
+    print '[+] Results saved in %s' % args.output_file
+    print '[+] Scan finished'
+    update_db(th, args.headers_file)
 
 if __name__ == '__main__':
     main()
