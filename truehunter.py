@@ -198,7 +198,7 @@ def main():
     description = """ _                   _                 _            
 | |                 | |               | |           
 | |_ _ __ _   _  ___| |__  _   _ _ __ | |_ ___ _ __ 
-| __| "__| | | |/ _ \ '_ \| | | | '_ \| __/ _ \ '__|
+| __| '__| | | |/ _ \ '_ \| | | | '_ \| __/ _ \ '__|
 | |_| |  | |_| |  __/ | | | |_| | | | | ||  __/ |   
  \__|_|   \__,_|\___|_| |_|\__,_|_| |_|\__\___|_|   
 [+] Truehunter detects TrueCrypt containers and high entropy files (probably encrypted).\n[+] Autor: Andres Doreste\n[+] LinkedIn: https://www.linkedin.com/in/andres-doreste-239471136/\n[+] Notes: This project it's just a PoC\n"""
